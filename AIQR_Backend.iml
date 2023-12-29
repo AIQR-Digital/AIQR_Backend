@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="WEB_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://D:/AIQR_Backend">
+      <excludeFolder url="file://D:/AIQR_Backend/.idea/sonarlint" />
+    </content>
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+  <component name="SonarLintModuleSettings">
+    <option name="uniqueId" value="a0d1213c-5f58-4c6d-bdae-d218b25a9231" />
+  </component>
+</module>

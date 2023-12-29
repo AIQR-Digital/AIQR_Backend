@@ -1,0 +1,10 @@
+{
+  "watch": ["src"],
+  "ext": "ts",
+  "exec": "ts-node --files src/server.ts",
+  "env": {
+    "AUTHORIZER_WEB_TOKEN": "c66ddfe410adfa043baa62c1899f9f3cf4ff10852915ececf0744d9537edd986a0cfcbe5d271b3505972b89196990463f2de8afa9291e70cc12191ffd27bf445",
+    "VENDOR_WEB_TOKEN": "791b307bfe4987289ab24cfa8627d1d69f557ac641604ceb574f40ae1429f970ac9de89d9d5360ff150577aed27ce93a4ea3280c89472546f96f79939fac83e4",
+    "CONSUMER_WEB_TOKEN": "ff52ef8055d8807bdb0dad77bc943ab19547aa9034aac7a8af79252e6dc91db44ecf0349397529c9a54763bc7c847cabedd79c913cc1f56b4528fd096549cfc2"
+  }
+}
