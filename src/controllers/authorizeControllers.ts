@@ -29,7 +29,7 @@ const contactIsValid = (contact: string) => {
 
 export const authRegistrationController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: AuthorizerRegisterData = req.body;
 
@@ -87,7 +87,7 @@ export const authRegistrationController = async (req: Request, res: Response, ne
 
 export const authLoginController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: AuthorizerLoginData = req.body;
 
@@ -142,7 +142,7 @@ const generatePassKey = async () => {
 
 export const authCreateVendor = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: AuthorizerVendorRegisterData = req.body;
 

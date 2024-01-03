@@ -21,4 +21,4 @@ const authVendorSchema = new Schema({
     }
 });
 
-export const Authorized_Vendor_Model = mongoose.model("Authorized_Vendor", authVendorSchema);
+export const Authorized_Vendor_Model = mongoose.model("Authorized_Vendor_Data", authVendorSchema);

@@ -1,11 +1,18 @@
 import {NextFunction, Request, Response} from "express";
 
-import {RestaurantData, TableData} from "../models/vendorModels";
 import {
-    VendorRegisterData,
+    MenuItemDataModel,
+    RestaurantDataModel,
+    RestaurantMenuCategoryDataModel,
+    TableDataModel
+} from "../models/vendorModels";
+import {
     VendorLoginData,
-    VendorUpdateData,
+    VendorMenuCategoryData,
+    VendorMenuItemData,
+    VendorRegisterData,
     VendorTableData,
+    VendorUpdateData,
     VendorUpdateTableData
 } from "../types/types";
 import {hashCompare, hashGenerator} from "../utils/hashGenerator";
@@ -13,7 +20,8 @@ import {ErrorCheck} from "../utils/ErrorCheck";
 import {generateAccessToken} from "../middlewares/jwtValidation";
 import {ErrorWithCode} from "../utils/ErrorWithCode";
 import {
-    DATABASE_EXCEPTION, FIELD_VALIDATION_EXCEPTION,
+    DATABASE_EXCEPTION,
+    FIELD_VALIDATION_EXCEPTION,
     INVALID_AUTHORIZATION_EXCEPTION,
     NOT_FOUND_EXCEPTION,
     SERVER_EXCEPTION,
@@ -46,7 +54,7 @@ const validatePassKey = async (passKey: string, contact: string) => {
 
 export const vendorRegistrationController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: VendorRegisterData = req.body;
 
@@ -57,7 +65,7 @@ export const vendorRegistrationController = async (req: Request, res: Response, 
             return next(new ErrorWithCode("Invalid PassKey, Please contact Authorizer", 401, INVALID_AUTHORIZATION_EXCEPTION));
         }
 
-        const existingVendor = await RestaurantData.findOne({
+        const existingVendor = await RestaurantDataModel.findOne({
             contact: vendorPayload.vendorContact
         });
         if (existingVendor) {
@@ -71,7 +79,7 @@ export const vendorRegistrationController = async (req: Request, res: Response, 
         // SMS TRIGGER FOR OTP VERIFICATION
 
 
-        const restaurantData = new RestaurantData({
+        const restaurantData = new RestaurantDataModel({
             vendorName: vendorPayload.vendorName,
             restaurantName: body.restaurantName,
             contact: vendorPayload.vendorContact,
@@ -112,14 +120,13 @@ export const vendorRegistrationController = async (req: Request, res: Response, 
     }
 };
 
-
 export const vendorLoginController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: VendorLoginData = req.body;
 
-        const restaurantData = await RestaurantData.findOne({
+        const restaurantData = await RestaurantDataModel.findOne({
             contact: Number(body.contact.trim())
         }).select("password id");
         if (!restaurantData) {
@@ -157,10 +164,10 @@ export const vendorLoginController = async (req: Request, res: Response, next: N
 export const vendorDataController = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const restaurantData =
-            await RestaurantData.findById(req.tokenData.id)
+            await RestaurantDataModel.findById(req.tokenData.id)
                 .populate({
-                    path: "tables",
-                    select: "-tablePassKey -__v"
+                    path: "tables categories",
+                    select: "-tablePassKey -__v -insertTimestamp -updateTimestamp"
                 })
                 .select("-password -__v -insertTimestamp -updateTimestamp");
 
@@ -186,17 +193,17 @@ export const vendorDataController = async (req: Request, res: Response, next: Ne
 
 export const vendorUpdateController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: VendorUpdateData = req.body;
 
-        const restaurantData = await RestaurantData.findById(req.tokenData.id);
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id);
         if (!restaurantData) {
             log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
             return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
         }
 
-        const savedData = await RestaurantData.findByIdAndUpdate(req.tokenData.id, {
+        const savedData = await RestaurantDataModel.findByIdAndUpdate(req.tokenData.id, {
             vendorName: body.vendorName,
             restaurantName: body.restaurantName,
             contact: body.contact,
@@ -222,13 +229,43 @@ export const vendorUpdateController = async (req: Request, res: Response, next: 
     }
 };
 
+export const vendorGetAllTableController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const restaurantData =
+            await RestaurantDataModel.findById(req.tokenData.id)
+                .populate({
+                    path: "tables",
+                    select: "-tablePassKey -__v"
+                })
+                .select("id tables");
+
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        log.info("Successfully Fetched Restaurant Details");
+        res.status(200).json({
+            success: true,
+            message: "SUCCESSFULLY FETCHED DETAILS",
+            data: restaurantData
+        });
+    } catch (error: any) {
+        log.info("Failed to fetch Restaurant Details");
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
 export const vendorAddTableController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: VendorTableData = req.body;
 
-        const restaurantData = await RestaurantData.findById(req.tokenData.id).select("id restaurantName");
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id).select("id restaurantName");
         if (!restaurantData) {
             log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
             return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
@@ -238,14 +275,14 @@ export const vendorAddTableController = async (req: Request, res: Response, next
             table_no: table.tableId,
             tablePassKey: null
         }));
-        const tablesCreated = await TableData.create(tablesMappedData);
+        const tablesCreated = await TableDataModel.create(tablesMappedData);
         if (!tablesCreated) {
             return next(new ErrorWithCode("Failed to save tables", 500, DATABASE_EXCEPTION));
         }
 
         const createdTableIds = tablesCreated.map(table => table.id);
 
-        const updateRestaurantFields = await RestaurantData.findByIdAndUpdate(restaurantData, {
+        const updateRestaurantFields = await RestaurantDataModel.findByIdAndUpdate(restaurantData, {
             $push: {
                 tables: {
                     $each: createdTableIds
@@ -256,11 +293,12 @@ export const vendorAddTableController = async (req: Request, res: Response, next
         }).select("id");
 
         if (!updateRestaurantFields) {
+            log.error(createdTableIds);
             log.error(`Failed to Map Table Ids with the Restaurant - ${restaurantData.restaurantName} Data Fields`);
             return next(new ErrorWithCode("Failed to Update Database", 500, DATABASE_EXCEPTION));
         }
 
-        res.status(200).json({
+        res.status(201).json({
             success: true,
             message: "SUCCESSFULLY ADDED TABLE DETAILS"
         })
@@ -275,11 +313,11 @@ export const vendorAddTableController = async (req: Request, res: Response, next
 
 export const vendorUpdateTableController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
+        ErrorCheck(req);
 
         const body: VendorUpdateTableData = req.body;
         const tableId = req.params.tableId;
-        const restaurantData = await RestaurantData.findById(req.tokenData.id).select("id").exec();
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id).select("id").exec();
         if (!restaurantData) {
             log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
             return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
@@ -289,8 +327,9 @@ export const vendorUpdateTableController = async (req: Request, res: Response, n
             return next(new ErrorWithCode("Invalid Table Id", 400, FIELD_VALIDATION_EXCEPTION));
         }
 
-        const tableData = await TableData.findByIdAndUpdate(tableId, {
-            table_no: body.tableId
+        const tableData = await TableDataModel.findByIdAndUpdate(tableId, {
+            table_no: body.tableId,
+            updateTimestamp: timeZoned()
         }, {
             new: true
         }).select("id").exec();
@@ -302,7 +341,7 @@ export const vendorUpdateTableController = async (req: Request, res: Response, n
         res.status(200).json({
             success: true,
             message: "SUCCESSFULLY UPDATED TABLE DETAILS"
-        })
+        });
 
     } catch (error: any) {
         if (!(error instanceof ErrorWithCode)) {
@@ -314,7 +353,6 @@ export const vendorUpdateTableController = async (req: Request, res: Response, n
 
 export const vendorDeleteTableController = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        ErrorCheck(req, res, next);
 
         const tableId = req.params.tableId;
 
@@ -322,7 +360,7 @@ export const vendorDeleteTableController = async (req: Request, res: Response, n
             return next(new ErrorWithCode("Invalid Table Id", 400, FIELD_VALIDATION_EXCEPTION));
         }
 
-        const restaurantData = await RestaurantData.findByIdAndUpdate(req.tokenData.id, {
+        const restaurantData = await RestaurantDataModel.findByIdAndUpdate(req.tokenData.id, {
             $pull: {
                 tables: tableId
             }
@@ -332,7 +370,7 @@ export const vendorDeleteTableController = async (req: Request, res: Response, n
             return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
         }
 
-        const tableData = await TableData.findByIdAndDelete(tableId).exec();
+        const tableData = await TableDataModel.findByIdAndDelete(tableId).exec();
         if (!tableData) {
             log.error(`Table Not Found for id: ${tableId}`);
             return next(new ErrorWithCode("Unable to find the table Id", 404, NOT_FOUND_EXCEPTION));
@@ -341,6 +379,411 @@ export const vendorDeleteTableController = async (req: Request, res: Response, n
         res.status(200).json({
             success: true,
             message: "SUCCESSFULLY DELETED TABLE DETAILS"
+        });
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorGetAllMenuCategoryController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id)
+            .populate({
+                path: "categories",
+                select: "categoryName vendorName"
+            })
+            .select("id categories")
+            .exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        log.info("Successfully Fetched Restaurant Details");
+        res.status(200).json({
+            success: true,
+            message: "SUCCESSFULLY FETCHED DETAILS",
+            data: restaurantData.categories
+        });
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorMenuAddCategoryController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        ErrorCheck(req);
+
+        const body: VendorMenuCategoryData = req.body;
+
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id)
+            .populate({
+                path: "categories",
+                select: "categoryName vendorName"
+            })
+            .select("id categories")
+            .exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        const categoryExists = restaurantData.categories?.filter(category => {
+            return category.categoryName.toLowerCase() === body.categoryName.toLowerCase()
+        });
+        if (categoryExists?.length !== 0) {
+            return res.status(208).json({
+                success: true,
+                message: "CATEGORY ALREADY EXISTS"
+            })
+        }
+
+        const restaurantMenuCategoryData = new RestaurantMenuCategoryDataModel({
+            categoryName: body.categoryName
+        });
+
+        const savedData = await restaurantMenuCategoryData.save();
+        if (!savedData) {
+            log.error(`Failed to Add Category Data for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+            return next(new ErrorWithCode("Failed to Create Restaurant Category Data", 500, DATABASE_EXCEPTION));
+        }
+
+        const updateRestaurantData = await RestaurantDataModel.findByIdAndUpdate(restaurantData.id, {
+            $push: {
+                categories: savedData
+            }
+        });
+        if (!updateRestaurantData) {
+            log.error(`Failed to Map Category Data with Restaurant for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+            return next(new ErrorWithCode("Failed to Update Restaurant Data with Category", 500, DATABASE_EXCEPTION));
+        }
+
+        res.status(201).json({
+            success: true,
+            message: "SUCCESSFULLY ADDED CATEGORY"
+        });
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorMenuCategoryUpdateController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        ErrorCheck(req);
+
+        const body: VendorMenuCategoryData = req.body;
+        const categoryId = req.params.categoryId;
+        const restaurantData = await RestaurantDataModel
+            .findById(req.tokenData.id)
+            .select("id categories")
+            .exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+            return next(new ErrorWithCode("Invalid Category Id", 400, FIELD_VALIDATION_EXCEPTION));
+        }
+
+        const restaurantMenuCategoryUpdateData = await RestaurantMenuCategoryDataModel.findByIdAndUpdate(categoryId, {
+            categoryName: body.categoryName,
+            updateTimestamp: timeZoned()
+        }, {
+            new: true
+        }).select("id").exec();
+        if (!restaurantMenuCategoryUpdateData) {
+            log.error(`Category Not Found for id: ${categoryId}`);
+            return next(new ErrorWithCode("Unable to find the Category Id", 404, NOT_FOUND_EXCEPTION));
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "SUCCESSFULLY UPDATED CATEGORY DETAILS"
+        })
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorDeleteMenuCategoryController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const categoryId = req.params.categoryId;
+
+        if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+            return next(new ErrorWithCode("Invalid Category Id", 400, FIELD_VALIDATION_EXCEPTION));
+        }
+
+        const restaurantData = await RestaurantDataModel.findByIdAndUpdate(req.tokenData.id, {
+            $pull: {
+                categories: categoryId
+            }
+        }).select("id").exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        const categoryMenuData = await RestaurantMenuCategoryDataModel.findByIdAndDelete(categoryId).exec();
+        if (!categoryMenuData) {
+            log.error(`Category Not Found for id: ${categoryId}`);
+            return next(new ErrorWithCode("Unable to find the category Id", 404, NOT_FOUND_EXCEPTION));
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "SUCCESSFULLY DELETED CATEGORY DETAILS"
+        });
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorGetAllMenuItemController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id)
+            .populate({
+                path: "categories",
+                select: "categoryItems vendorName",
+                populate: {
+                    path: "categoryItems",
+                    select: "-updateTimestamp -insertTimestamp"
+                }
+            })
+            .select("id categories")
+            .exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        log.info("Successfully Fetched Restaurant Details");
+        res.status(200).json({
+            success: true,
+            message: "SUCCESSFULLY FETCHED DETAILS",
+            data: restaurantData.categories
+        });
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorAddMenuItemController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        ErrorCheck(req);
+
+        const body: VendorMenuItemData = req.body;
+        const categoryId = req.params.categoryId;
+
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id)
+            .populate({
+                path: "categories",
+                select: "id"
+            })
+            .select("id categories vendorName")
+            .exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+            return next(new ErrorWithCode("Invalid Category Id", 400, FIELD_VALIDATION_EXCEPTION));
+        }
+
+        const categoryExists = restaurantData.categories?.filter(category => category._id.equals(categoryId))
+        if (categoryExists?.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "CATEGORY NOT EXISTS EXISTS"
+            });
+        }
+
+        const menuItemData = new MenuItemDataModel({
+            itemName: body.itemName,
+            itemPrice: body.itemPrice,
+            itemDiscount: body.itemDiscount,
+            itemDescription: body.itemDescription,
+            itemIngredients: body.itemIngredients,
+            itemImage: body.itemImage,
+            chefSpecial: body.chefSpecial,
+            isSpicy: body.isSpicy,
+            mustTry: body.mustTry
+        });
+
+        const savedData = await menuItemData.save();
+        if (!savedData) {
+            log.error(`Failed to Add Menu Item Data for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+            return next(new ErrorWithCode("Failed to Create Menu Item Data", 500, DATABASE_EXCEPTION));
+        }
+
+        const updatedCategoriesData = await RestaurantMenuCategoryDataModel.findByIdAndUpdate(categoryId, {
+            $push: {
+                categoryItems: savedData
+            }
+        });
+        if (!updatedCategoriesData) {
+            log.error(`Failed to Map Category Data with Menu Item for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+            return next(new ErrorWithCode("Failed to Update Category Data with Menu Item", 500, DATABASE_EXCEPTION));
+        }
+
+        res.status(201).json({
+            success: true,
+            message: "SUCCESSFULLY ADDED MENU ITEM"
+        });
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorUpdateMenuItemController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        ErrorCheck(req);
+
+        const body: VendorMenuItemData = req.body;
+        const menuItemId = req.params.menuItemId;
+
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id)
+            .populate({
+                path: "categories",
+                select: "id"
+            })
+            .select("id categories vendorName")
+            .exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(menuItemId)) {
+            return next(new ErrorWithCode("Invalid Category Id", 400, FIELD_VALIDATION_EXCEPTION));
+        }
+
+        const updateMenuItem = await MenuItemDataModel.findByIdAndUpdate(menuItemId, {
+            itemName: body.itemName,
+            itemPrice: body.itemPrice,
+            itemDiscount: body.itemDiscount,
+            itemDescription: body.itemDescription,
+            itemIngredients: body.itemIngredients,
+            itemImage: body.itemImage,
+            chefSpecial: body.chefSpecial,
+            isSpicy: body.isSpicy,
+            mustTry: body.mustTry,
+            updateTimestamp: timeZoned()
+        }, {
+            save: true
+        }).select("id").exec();
+        if (!updateMenuItem) {
+            log.error(`Menu Item Not Found for id: ${menuItemId}`);
+            return next(new ErrorWithCode("Unable to find the Menu Item Id", 404, NOT_FOUND_EXCEPTION));
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "SUCCESSFULLY UPDATED MENU ITEM DETAILS"
+        });
+
+    } catch (error: any) {
+        if (!(error instanceof ErrorWithCode)) {
+            throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
+        }
+        next(error);
+    }
+};
+
+export const vendorDeleteMenuItemController = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const menuItemId = req.params.menuItemId;
+        const categoryId = req.params.categoryId;
+
+        if (!mongoose.Types.ObjectId.isValid(menuItemId)) {
+            return next(new ErrorWithCode("Invalid Menu Item Id", 400, FIELD_VALIDATION_EXCEPTION));
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+            return next(new ErrorWithCode("Invalid Category Id", 400, FIELD_VALIDATION_EXCEPTION));
+        }
+
+        const restaurantData = await RestaurantDataModel.findById(req.tokenData.id)
+            .populate({
+                path: "categories",
+                select: "categoryItems",
+                populate: {
+                    path: "categoryItems",
+                    select: "id"
+                }
+            })
+            .select("id categories")
+            .exec();
+        if (!restaurantData) {
+            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
+        }
+
+        const categoryMappedMenuExists =
+            restaurantData
+                .categories
+                .filter(category =>
+                    category.id === categoryId &&
+                    category.categoryItems
+                        .filter(menuItem => menuItem.id === menuItemId).length !== 0
+                );
+        if (!categoryMappedMenuExists.length) {
+            log.error(`Menu Item: ${menuItemId} Not Found for Category Id: ${categoryId}`);
+            return next(new ErrorWithCode("Unable to find the Menu Item Id for given Category Id", 404, NOT_FOUND_EXCEPTION));
+        }
+
+        const deleteMenuItem = await MenuItemDataModel.findByIdAndDelete(menuItemId).exec();
+        if (!deleteMenuItem) {
+            log.error(`Menu Item Not Found for id: ${menuItemId}`);
+            return next(new ErrorWithCode("Unable to find the Menu Item Id", 404, NOT_FOUND_EXCEPTION));
+        }
+
+        const updatedData = await RestaurantMenuCategoryDataModel.findByIdAndUpdate(categoryId, {
+            $pull: {
+                categoryItems: menuItemId
+            }
+        }, {
+            new: true
+        }).select("id").exec();
+        if (!updatedData) {
+            log.error(`Menu Item Not Found for Category: ${categoryId} for id: ${menuItemId}`);
+            return next(new ErrorWithCode("Failed to Remove the Menu Item Id From Category", 404, NOT_FOUND_EXCEPTION));
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "SUCCESSFULLY DELETED MENU ITEM DETAILS",
         });
 
     } catch (error: any) {

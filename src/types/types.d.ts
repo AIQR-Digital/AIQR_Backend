@@ -1,4 +1,4 @@
-import {Types} from "mongoose";
+import {PopulatedDoc, Schema, Types, Document} from "mongoose";
 
 declare module "jsonwebtoken" {
     export interface JwtPayload {
@@ -51,6 +51,22 @@ export interface VendorUpdateTableData {
     tableId: string
 }
 
+export interface VendorMenuCategoryData {
+    categoryName: string
+}
+
+export interface VendorMenuItemData {
+    itemName: string,
+    itemPrice: number,
+    itemDiscount?: number,
+    itemDescription?: string,
+    itemIngredients?: string[],
+    itemImage?: string,
+    chefSpecial?: boolean,
+    isSpicy?: boolean,
+    mustTry?: boolean
+}
+
 // AUTHORIZER DATA TYPE
 
 export interface AuthorizerRegisterData {
@@ -70,3 +86,51 @@ export interface AuthorizerVendorRegisterData {
     vendorAddress: string
     contact: string
 }
+
+// DATABASE SCHEMA INTERFACES
+
+export interface TableSchemaData extends Document {
+    table_no: number,
+    tablePassKey: number,
+    insertTimestamp: string,
+    updateTimestamp: string,
+}
+
+export interface MenuItemSchemaData extends Document {
+    itemName: string,
+    itemPrice: number,
+    itemDiscount: number,
+    itemDescription: string,
+    itemIngredients: string[],
+    itemImage: string,
+    chefSpecial: boolean,
+    isSpicy: boolean,
+    mustTry: boolean,
+    insertTimestamp: string,
+    updateTimestamp: string,
+}
+
+export interface RestaurantMenuCategorySchemaData extends Document {
+    categoryName: string,
+    categoryItems: MenuItemSchemaData[],
+    insertTimestamp: string,
+    updateTimestamp: string,
+}
+
+
+export interface RestaurantSchemaData extends Document {
+    vendorName: string,
+    restaurantName: string,
+    password: string,
+    contact: number,
+    address: string,
+    image: string,
+    isContactVerified: boolean,
+    insertTimestamp: string,
+    updateTimestamp: string,
+    tables: TableSchemaData[],
+    categories: RestaurantMenuCategorySchemaData[]
+}
+
+
+

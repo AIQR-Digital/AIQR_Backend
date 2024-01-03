@@ -1,10 +1,10 @@
-import {NextFunction, Request, Response} from "express";
+import {Request} from "express";
 import {validationResult} from "express-validator";
 
 import {ErrorWithCode} from "./ErrorWithCode";
 import {FIELD_VALIDATION_EXCEPTION} from "./app.constants";
 
-export const ErrorCheck = (req: Request, res: Response, next: NextFunction) => {
+export const ErrorCheck = (req: Request) => {
     const contact = req.body.contact;
     const vendorContact = req.body.vendorContact;
     const errors = validationResult(req);
