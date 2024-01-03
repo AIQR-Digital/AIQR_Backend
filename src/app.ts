@@ -18,7 +18,7 @@ app.use(logRequest);
 app.use(logResponse);
 
 // SWAGGER OPENAPI - DOCUMENTATION
-swaggerDocs(app, Number(process.env.PORT || 3000));
+swaggerDocs(app, Number(process.env.PORT ?? 3000));
 app.get("/healthcheck", (req: Request, res: Response, next: NextFunction) => res.sendStatus(200));
 
 app.use("/authorize", authorizerRouter);
