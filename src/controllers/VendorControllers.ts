@@ -1,5 +1,4 @@
 import {NextFunction, Request, Response} from "express";
-
 import {
     MenuItemDataModel,
     RestaurantDataModel,
@@ -275,33 +274,44 @@ export const vendorAddTableController = async (req: Request, res: Response, next
             table_no: table.tableId,
             tablePassKey: null
         }));
-        const tablesCreated = await TableDataModel.create(tablesMappedData);
-        if (!tablesCreated) {
-            return next(new ErrorWithCode("Failed to save tables", 500, DATABASE_EXCEPTION));
-        }
 
-        const createdTableIds = tablesCreated.map(table => table.id);
-
-        const updateRestaurantFields = await RestaurantDataModel.findByIdAndUpdate(restaurantData, {
-            $push: {
-                tables: {
-                    $each: createdTableIds
-                }
+        const session = await TableDataModel.startSession();
+        session.startTransaction();
+        try {
+            const tablesCreated = await TableDataModel.create(tablesMappedData);
+            if (!tablesCreated) {
+                throw new ErrorWithCode("Failed to save tables", 500, DATABASE_EXCEPTION);
             }
-        }, {
-            new: true
-        }).select("id");
 
-        if (!updateRestaurantFields) {
-            log.error(createdTableIds);
-            log.error(`Failed to Map Table Ids with the Restaurant - ${restaurantData.restaurantName} Data Fields`);
-            return next(new ErrorWithCode("Failed to Update Database", 500, DATABASE_EXCEPTION));
+            const createdTableIds = tablesCreated.map(table => table.id);
+
+            const updateRestaurantFields = await RestaurantDataModel.findByIdAndUpdate(restaurantData, {
+                $push: {
+                    tables: {
+                        $each: createdTableIds
+                    }
+                }
+            }, {
+                new: true
+            }).select("id");
+            if (!updateRestaurantFields) {
+                log.error(createdTableIds);
+                log.error(`Failed to Map Table Ids with the Restaurant - ${restaurantData.restaurantName} Data Fields`);
+                throw new ErrorWithCode("Failed to Update Database", 500, DATABASE_EXCEPTION);
+            }
+
+            await session.commitTransaction();
+            await session.endSession();
+
+            res.status(201).json({
+                success: true,
+                message: "SUCCESSFULLY ADDED TABLE DETAILS"
+            });
+        } catch (error: any) {
+            await session.abortTransaction();
+            await session.endSession();
+            next(error);
         }
-
-        res.status(201).json({
-            success: true,
-            message: "SUCCESSFULLY ADDED TABLE DETAILS"
-        })
 
     } catch (error: any) {
         if (!(error instanceof ErrorWithCode)) {
@@ -360,26 +370,41 @@ export const vendorDeleteTableController = async (req: Request, res: Response, n
             return next(new ErrorWithCode("Invalid Table Id", 400, FIELD_VALIDATION_EXCEPTION));
         }
 
-        const restaurantData = await RestaurantDataModel.findByIdAndUpdate(req.tokenData.id, {
-            $pull: {
-                tables: tableId
+        const session = await RestaurantDataModel.startSession();
+        session.startTransaction();
+        try {
+            const restaurantData = await RestaurantDataModel.findByIdAndUpdate(req.tokenData.id, {
+                $pull: {
+                    tables: tableId
+                }
+            }, {
+                session
+            }).select("id").exec();
+            if (!restaurantData) {
+                log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+                throw new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION);
             }
-        }).select("id").exec();
-        if (!restaurantData) {
-            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
-            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
-        }
 
-        const tableData = await TableDataModel.findByIdAndDelete(tableId).exec();
-        if (!tableData) {
-            log.error(`Table Not Found for id: ${tableId}`);
-            return next(new ErrorWithCode("Unable to find the table Id", 404, NOT_FOUND_EXCEPTION));
-        }
+            const tableData = await TableDataModel.findByIdAndDelete(tableId, {
+                session
+            }).exec();
+            if (!tableData) {
+                log.error(`Table Not Found for id: ${tableId}`);
+                throw new ErrorWithCode("Unable to find the table Id", 404, NOT_FOUND_EXCEPTION);
+            }
 
-        res.status(200).json({
-            success: true,
-            message: "SUCCESSFULLY DELETED TABLE DETAILS"
-        });
+            await session.commitTransaction();
+            await session.endSession();
+
+            res.status(200).json({
+                success: true,
+                message: "SUCCESSFULLY DELETED TABLE DETAILS"
+            });
+        } catch (error: any) {
+            await session.abortTransaction();
+            await session.endSession();
+            next(error);
+        }
 
     } catch (error: any) {
         if (!(error instanceof ErrorWithCode)) {
@@ -447,30 +472,41 @@ export const vendorMenuAddCategoryController = async (req: Request, res: Respons
             })
         }
 
-        const restaurantMenuCategoryData = new RestaurantMenuCategoryDataModel({
-            categoryName: body.categoryName
-        });
+        const session = await RestaurantMenuCategoryDataModel.startSession();
+        session.startTransaction();
+        try {
+            const restaurantMenuCategoryData = new RestaurantMenuCategoryDataModel({
+                categoryName: body.categoryName
+            });
 
-        const savedData = await restaurantMenuCategoryData.save();
-        if (!savedData) {
-            log.error(`Failed to Add Category Data for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
-            return next(new ErrorWithCode("Failed to Create Restaurant Category Data", 500, DATABASE_EXCEPTION));
-        }
-
-        const updateRestaurantData = await RestaurantDataModel.findByIdAndUpdate(restaurantData.id, {
-            $push: {
-                categories: savedData
+            const savedData = await restaurantMenuCategoryData.save();
+            if (!savedData) {
+                log.error(`Failed to Add Category Data for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+                throw new ErrorWithCode("Failed to Create Restaurant Category Data", 500, DATABASE_EXCEPTION);
             }
-        });
-        if (!updateRestaurantData) {
-            log.error(`Failed to Map Category Data with Restaurant for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
-            return next(new ErrorWithCode("Failed to Update Restaurant Data with Category", 500, DATABASE_EXCEPTION));
-        }
 
-        res.status(201).json({
-            success: true,
-            message: "SUCCESSFULLY ADDED CATEGORY"
-        });
+            const updateRestaurantData = await RestaurantDataModel.findByIdAndUpdate(restaurantData.id, {
+                $push: {
+                    categories: savedData
+                }
+            });
+            if (!updateRestaurantData) {
+                log.error(`Failed to Map Category Data with Restaurant for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+                throw new ErrorWithCode("Failed to Update Restaurant Data with Category", 500, DATABASE_EXCEPTION);
+            }
+
+            await session.commitTransaction();
+            await session.endSession();
+
+            res.status(201).json({
+                success: true,
+                message: "SUCCESSFULLY ADDED CATEGORY"
+            });
+        } catch (error: any) {
+            await session.abortTransaction();
+            await session.endSession();
+            next(error);
+        }
 
     } catch (error: any) {
         if (!(error instanceof ErrorWithCode)) {
@@ -531,26 +567,37 @@ export const vendorDeleteMenuCategoryController = async (req: Request, res: Resp
             return next(new ErrorWithCode("Invalid Category Id", 400, FIELD_VALIDATION_EXCEPTION));
         }
 
-        const restaurantData = await RestaurantDataModel.findByIdAndUpdate(req.tokenData.id, {
-            $pull: {
-                categories: categoryId
+        const session = await RestaurantDataModel.startSession();
+        session.startTransaction();
+        try {
+            const restaurantData = await RestaurantDataModel.findByIdAndUpdate(req.tokenData.id, {
+                $pull: {
+                    categories: categoryId
+                }
+            }).select("id").exec();
+            if (!restaurantData) {
+                log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
+                throw new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION);
             }
-        }).select("id").exec();
-        if (!restaurantData) {
-            log.error(`Vendor Not Found for id: ${req.tokenData.id}`);
-            return next(new ErrorWithCode("Unauthorized Access, Please Login/Register first", 401, INVALID_AUTHORIZATION_EXCEPTION));
-        }
 
-        const categoryMenuData = await RestaurantMenuCategoryDataModel.findByIdAndDelete(categoryId).exec();
-        if (!categoryMenuData) {
-            log.error(`Category Not Found for id: ${categoryId}`);
-            return next(new ErrorWithCode("Unable to find the category Id", 404, NOT_FOUND_EXCEPTION));
-        }
+            const categoryMenuData = await RestaurantMenuCategoryDataModel.findByIdAndDelete(categoryId).exec();
+            if (!categoryMenuData) {
+                log.error(`Category Not Found for id: ${categoryId}`);
+                throw new ErrorWithCode("Unable to find the category Id", 404, NOT_FOUND_EXCEPTION);
+            }
 
-        res.status(200).json({
-            success: true,
-            message: "SUCCESSFULLY DELETED CATEGORY DETAILS"
-        });
+            await session.commitTransaction();
+            await session.endSession();
+
+            res.status(200).json({
+                success: true,
+                message: "SUCCESSFULLY DELETED CATEGORY DETAILS"
+            });
+        } catch (error: any) {
+            await session.abortTransaction();
+            await session.endSession();
+            next(error);
+        }
 
     } catch (error: any) {
         if (!(error instanceof ErrorWithCode)) {
@@ -625,39 +672,49 @@ export const vendorAddMenuItemController = async (req: Request, res: Response, n
             });
         }
 
-        const menuItemData = new MenuItemDataModel({
-            itemName: body.itemName,
-            itemPrice: body.itemPrice,
-            itemDiscount: body.itemDiscount,
-            itemDescription: body.itemDescription,
-            itemIngredients: body.itemIngredients,
-            itemImage: body.itemImage,
-            chefSpecial: body.chefSpecial,
-            isSpicy: body.isSpicy,
-            mustTry: body.mustTry
-        });
+        const session = await MenuItemDataModel.startSession();
+        session.startTransaction();
+        try {
+            const menuItemData = new MenuItemDataModel({
+                itemName: body.itemName,
+                itemPrice: body.itemPrice,
+                itemDiscount: body.itemDiscount,
+                itemDescription: body.itemDescription,
+                itemIngredients: body.itemIngredients,
+                itemImage: body.itemImage,
+                chefSpecial: body.chefSpecial,
+                isSpicy: body.isSpicy,
+                mustTry: body.mustTry
+            });
 
-        const savedData = await menuItemData.save();
-        if (!savedData) {
-            log.error(`Failed to Add Menu Item Data for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
-            return next(new ErrorWithCode("Failed to Create Menu Item Data", 500, DATABASE_EXCEPTION));
-        }
-
-        const updatedCategoriesData = await RestaurantMenuCategoryDataModel.findByIdAndUpdate(categoryId, {
-            $push: {
-                categoryItems: savedData
+            const savedData = await menuItemData.save();
+            if (!savedData) {
+                log.error(`Failed to Add Menu Item Data for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+                throw new ErrorWithCode("Failed to Create Menu Item Data", 500, DATABASE_EXCEPTION);
             }
-        });
-        if (!updatedCategoriesData) {
-            log.error(`Failed to Map Category Data with Menu Item for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
-            return next(new ErrorWithCode("Failed to Update Category Data with Menu Item", 500, DATABASE_EXCEPTION));
+
+            const updatedCategoriesData = await RestaurantMenuCategoryDataModel.findByIdAndUpdate(categoryId, {
+                $push: {
+                    categoryItems: savedData
+                }
+            });
+            if (!updatedCategoriesData) {
+                log.error(`Failed to Map Category Data with Menu Item for ID: ${req.tokenData.id} - ${restaurantData.vendorName}`);
+                throw new ErrorWithCode("Failed to Update Category Data with Menu Item", 500, DATABASE_EXCEPTION);
+            }
+
+            await session.commitTransaction();
+            await session.endSession();
+
+            res.status(201).json({
+                success: true,
+                message: "SUCCESSFULLY ADDED MENU ITEM"
+            });
+        } catch (error: any) {
+            await session.abortTransaction();
+            await session.endSession();
+            next(error);
         }
-
-        res.status(201).json({
-            success: true,
-            message: "SUCCESSFULLY ADDED MENU ITEM"
-        });
-
     } catch (error: any) {
         if (!(error instanceof ErrorWithCode)) {
             throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
@@ -763,29 +820,39 @@ export const vendorDeleteMenuItemController = async (req: Request, res: Response
             return next(new ErrorWithCode("Unable to find the Menu Item Id for given Category Id", 404, NOT_FOUND_EXCEPTION));
         }
 
-        const deleteMenuItem = await MenuItemDataModel.findByIdAndDelete(menuItemId).exec();
-        if (!deleteMenuItem) {
-            log.error(`Menu Item Not Found for id: ${menuItemId}`);
-            return next(new ErrorWithCode("Unable to find the Menu Item Id", 404, NOT_FOUND_EXCEPTION));
-        }
-
-        const updatedData = await RestaurantMenuCategoryDataModel.findByIdAndUpdate(categoryId, {
-            $pull: {
-                categoryItems: menuItemId
+        const session = await MenuItemDataModel.startSession();
+        session.startTransaction();
+        try {
+            const deleteMenuItem = await MenuItemDataModel.findByIdAndDelete(menuItemId).exec();
+            if (!deleteMenuItem) {
+                log.error(`Menu Item Not Found for id: ${menuItemId}`);
+                throw new ErrorWithCode("Unable to find the Menu Item Id", 404, NOT_FOUND_EXCEPTION);
             }
-        }, {
-            new: true
-        }).select("id").exec();
-        if (!updatedData) {
-            log.error(`Menu Item Not Found for Category: ${categoryId} for id: ${menuItemId}`);
-            return next(new ErrorWithCode("Failed to Remove the Menu Item Id From Category", 404, NOT_FOUND_EXCEPTION));
+
+            const updatedData = await RestaurantMenuCategoryDataModel.findByIdAndUpdate(categoryId, {
+                $pull: {
+                    categoryItems: menuItemId
+                }
+            }, {
+                new: true
+            }).select("id").exec();
+            if (!updatedData) {
+                log.error(`Menu Item Not Found for Category: ${categoryId} for id: ${menuItemId}`);
+                throw new ErrorWithCode("Failed to Remove the Menu Item Id From Category", 404, NOT_FOUND_EXCEPTION);
+            }
+
+            await session.commitTransaction();
+            await session.endSession();
+
+            res.status(200).json({
+                success: true,
+                message: "SUCCESSFULLY DELETED MENU ITEM DETAILS",
+            });
+        } catch (error: any) {
+            await session.abortTransaction();
+            await session.endSession();
+            next(error);
         }
-
-        res.status(200).json({
-            success: true,
-            message: "SUCCESSFULLY DELETED MENU ITEM DETAILS",
-        });
-
     } catch (error: any) {
         if (!(error instanceof ErrorWithCode)) {
             throw new ErrorWithCode(error.message || "Something went wrong, please try again later", 500, SERVER_EXCEPTION, error.stack);
