@@ -1,6 +1,6 @@
 import winston, {Logform, LoggerOptions} from "winston";
 import path from "path";
-import {LOG_BUFFER_SPACE, LOG_INFO_SPACE} from "./app.constants";
+import {LOG_BUFFER_SPACE} from "./app.constants";
 
 const getLabel = function (callingModule: string) {
     const dirname = path.dirname(callingModule).split("\\").pop() || "Utils";
@@ -41,7 +41,6 @@ const getWinstonOptions = (callingModule: string) => {
 };
 
 const logger = (callingModule: string) => winston.createLogger(getWinstonOptions(callingModule));
-
 const logAllArgs = (args: any[], logMethod: winston.LeveledLogMethod) => {
     args.forEach(arg => {
         logMethod(arg);
@@ -49,11 +48,11 @@ const logAllArgs = (args: any[], logMethod: winston.LeveledLogMethod) => {
 };
 
 // Override the default logging functions with a call to the loggers respective method
-const log = logger(__filename);
-console.log = (message, ...args) => log.info(message) && args && logAllArgs(args, log.info);
-console.info = (message, ...args) => log.info(message) && args && logAllArgs(args, log.info);
-console.warn = (message, ...args) => log.warn(message) && args && logAllArgs(args, log.warn);
-console.error = (message, ...args) => log.error(message) && args && logAllArgs(args, log.error);
-console.debug = (message, ...args) => log.debug(message) && args && logAllArgs(args, log.debug);
+// const log = logger(__filename);
+// console.log = (message, ...args) => log.info(message) && args && logAllArgs(args, log.info);
+// console.info = (message, ...args) => log.info(message) && args && logAllArgs(args, log.info);
+// console.warn = (message, ...args) => log.warn(message) && args && logAllArgs(args, log.warn);
+// console.error = (message, ...args) => log.error(message) && args && logAllArgs(args, log.error);
+// console.debug = (message, ...args) => log.debug(message) && args && logAllArgs(args, log.debug);
 
 export default logger;
