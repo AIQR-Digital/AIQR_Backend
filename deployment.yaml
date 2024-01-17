@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiqr-backend-service
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aiqr-backend-service
+  template:
+    metadata:
+      labels:
+        app: aiqr-backend-service
+    spec:
+      containers:
+        - name: aiqr-backend-service
+          image: aiqrdigital/aiqr_backend
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000

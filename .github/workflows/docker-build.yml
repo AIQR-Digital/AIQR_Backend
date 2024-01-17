@@ -1,4 +1,4 @@
-name: Create Docker image
+name: Docker Build and Push
 on:
   push:
     branches:
@@ -27,3 +27,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/aiqr_backend:latest
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
