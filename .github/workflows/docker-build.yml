@@ -27,7 +27,15 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/aiqr_backend:latest
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+
+      - name: SSH into EC2 and deploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            docker pull aiqrdigital/aiqr_backend:latest
+            docker stop aiqr_backend || true
+            docker rm aiqr_backend || true
+            docker run -d -p 3000:3000 -p 3000:8080 --name aiqr_backend aiqrdigital/aiqr_backend:latest
