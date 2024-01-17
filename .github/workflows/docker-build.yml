@@ -38,4 +38,4 @@ jobs:
             docker pull aiqrdigital/aiqr_backend:latest
             docker stop aiqr_backend || true
             docker rm aiqr_backend || true
-            docker run -d -p 3000:3000 -p 3000:8080 --name aiqr_backend aiqrdigital/aiqr_backend:latest
+            docker run -d -p 3000:3000 --name aiqr_backend aiqrdigital/aiqr_backend:latest
