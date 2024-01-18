@@ -27,14 +27,111 @@ import {
 import {authenticateAccess} from "../middlewares/jwtValidation";
 import {NOT_FOUND_EXCEPTION, USER_TYPE} from "../utils/app.constants";
 import {ErrorWithCode} from "../utils/ErrorWithCode";
+import {Route} from "../types/types";
 
 const router = Router();
 
+/**
+ * @swagger
+ * /vendor/login:
+ *  post:
+ *      summary: Login Vendor
+ *      tags:
+ *          - Vendor Data(Restaurant Data)
+ *      requestBody:
+ *          required: true
+ *          content:
+ *              application/json:
+ *                  schema:
+ *                      type: object
+ *                      required:
+ *                          - contact
+ *                          - password
+ *                      properties:
+ *                          contact:
+ *                              type: integer
+ *                              example: XXXXXXXXXX
+ *                          password:
+ *                              type: string
+ *                              example: XXXXXXXX
+ *      responses:
+ *          200:
+ *              description: Successful Response
+ *              content:
+ *                  application/json:
+ *                      example:
+ *                          data:
+ *                              success: boolean
+ *                              token: <BEARER TOKEN>
+ *                              message: string
+ *
+ */
 router.post("/login", validateVendorLogin, vendorLoginController);
+
+
+/**
+ * @swagger
+ * /vendor/register:
+ *  post:
+ *      summary: Register Vendor
+ *      tags:
+ *          - Vendor Data(Restaurant Data)
+ *      requestBody:
+ *          required: true
+ *          content:
+ *              application/json:
+ *                  schema:
+ *                      type: object
+ *                      required:
+ *                          - restaurantName
+ *                          - vendorContact
+ *                          - password
+ *                          - passkey
+ *                      properties:
+ *                          restaurantName:
+ *                              type: string
+ *                          vendorContact:
+ *                              type: integer
+ *                              example: XXXXXXXXXX
+ *                          password:
+ *                              type: string
+ *                              example: XXXXXXXX
+ *                          passkey:
+ *                              type: string
+ *                              example: XXXXXX
+ *      responses:
+ *          200:
+ *              description: Successful Response
+ *              content:
+ *                  application/json:
+ *                      example:
+ *                          data:
+ *                              success: boolean
+ *                              token: <BEARER TOKEN>
+ *                              message: string
+ *
+ */
 router.post("/register", validateVendorRegistration, vendorRegistrationController);
 
 router.use((req: Request, res: Response, next: NextFunction) => authenticateAccess(req, res, next, USER_TYPE.VENDOR));
 
+/**
+ * @swagger
+ * /vendor/getvendordata:
+ *  get:
+ *      summary: Gets the Vendor Data
+ *      tags:
+ *          - Vendor Data(Restaurant Data)
+ *      security:
+ *          - bearerAuth: []
+ *      responses:
+ *          200:
+ *              description: Successful Response
+ *              content:
+ *                  application/json:
+ *                      example:
+ *                          data: {}
+ */
 router.get("/getvendordata", vendorDataController);
 router.put("/update", validateVendorUpdate, vendorUpdateController);
 

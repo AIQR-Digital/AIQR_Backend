@@ -1,4 +1,6 @@
+import {Request, Response, NextFunction} from "express";
 import {PopulatedDoc, Schema, Types, Document} from "mongoose";
+import {ValidationChain} from "express-validator";
 
 declare module "jsonwebtoken" {
     export interface JwtPayload {
@@ -6,6 +8,13 @@ declare module "jsonwebtoken" {
         timeStamp: string
         generatedBy: JSON_TOKEN_TYPE
     }
+}
+
+export interface Route {
+    method: 'get' | 'post' | 'put' | 'patch' | 'delete'
+    path: string
+    middleware?: ValidationChain[] | ((req: Request, res: Response, next: NextFunction) => void)[];
+    handler: (req: Request, res: Response, next: NextFunction) => void;
 }
 
 export type JSON_TOKEN_TYPE = "AUTHORIZER" | "VENDOR" | "CONSUMER";

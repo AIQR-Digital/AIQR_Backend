@@ -50,7 +50,7 @@ if (process.env.DATABASE && process.env.DATABASE_USERNAME && process.env.DATABAS
             log.info('DB connection successful!');
             app.listen(port, () => {
                 log.info(`App Running on Port ${port}....`);
-
+                log.info(`Docs available at http://localhost:${port}/docs`);
             });
         })
         .catch(error => {
